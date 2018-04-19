@@ -22,9 +22,10 @@
 
 #pragma comment(lib, "Version.lib")
 
-#define HELP_LINES_COUNT 10
+#define HELP_LINES_COUNT 11
 static wchar_t helpLines[][250] = {
-	L"applocalverify.exe -help\n\n",
+	L" applocalverify.exe -help\n",
+	L" Copyright (c) 2018 past-due - MIT License (https://github.com/past-due/applocalconfig)\n\n",
 	L" Command-line options:\n",
 	L"  -getmoduledetails <filename>\n",
 	L"\tDisplay details about the library that's required by the executable.\n",

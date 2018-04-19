@@ -22,9 +22,10 @@
 #include <Shlwapi.h>
 #include "runtime_libs.h"
 
-#define HELP_LINES_COUNT 8
+#define HELP_LINES_COUNT 9
 static wchar_t helpLines[][250] = {
-	L"applocalconfig.exe -help\n\n",
+	L" applocalconfig.exe -help\n",
+	L" Copyright (c) 2018 past-due - MIT License (https://github.com/past-due/applocalconfig)\n\n",
 	L" Command-line options:\n",
 	L"  -disablecrt\n",
 	L"\tDisable the applocal CRT runtime, moving it into a subdirectory.\n",
