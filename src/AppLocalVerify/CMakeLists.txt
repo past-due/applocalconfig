@@ -11,7 +11,7 @@ endif()
 set(CMAKE_CXX_STANDARD 11)
 
 # applocalverify.exe
-add_executable(applocalverify "AppLocalVerify.cpp" "codesignextract.cpp" "stdafx.cpp" "applocalverify.rc" "${PROJECT_BINARY_DIR}//runtime_libs.h")
+add_executable(applocalverify "AppLocalVerify.cpp" "codesignextract.cpp" "stdafx.cpp" "applocalverify.rc" "${CMAKE_CURRENT_BINARY_DIR}/../runtime_libs.h")
 target_compile_definitions(applocalverify PRIVATE "UNICODE" "_UNICODE")
 set_target_properties(applocalverify PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}")
 set_target_properties(applocalverify PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}")

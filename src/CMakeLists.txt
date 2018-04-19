@@ -38,9 +38,9 @@ foreach (lib ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
 	endif()
 endforeach()
 set(_runtimeListH "${_runtimeListH}\n};\n")
-file(WRITE "${PROJECT_BINARY_DIR}//runtime_libs.h" "${_runtimeListH}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}//runtime_libs.h" "${_runtimeListH}")
 
-#actually install the system runtime libs
+# Actually install the system runtime libs
 install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
 		DESTINATION "."
 		COMPONENT "Core"
@@ -70,7 +70,7 @@ endif()
 set(SOURCE_FILES AppLocalConfig.cpp)
 
 # applocalconfig.exe
-add_executable(applocalconfig ${SOURCE_FILES} "${PROJECT_BINARY_DIR}//runtime_libs.h")
+add_executable(applocalconfig ${SOURCE_FILES} "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs.h")
 target_compile_definitions(applocalconfig PRIVATE "UNICODE" "_UNICODE")
 set_target_properties(applocalconfig PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}")
 set_target_properties(applocalconfig PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}")
