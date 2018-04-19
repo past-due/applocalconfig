@@ -20,6 +20,7 @@ set_target_properties(applocalverify PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG "
 
 if (MSVC)
 	set_property(TARGET applocalverify APPEND_STRING PROPERTY LINK_FLAGS " /MANIFEST:NO")
+	target_compile_definitions(applocalverify PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
 install(TARGETS applocalverify COMPONENT "Core" DESTINATION ".")

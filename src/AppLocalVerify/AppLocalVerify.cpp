@@ -18,6 +18,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <memory>
+#include <iterator>
 
 #pragma comment(lib, "Version.lib")
 
