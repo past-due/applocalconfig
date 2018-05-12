@@ -44,7 +44,13 @@ static bool printOutString(LPCWSTR str)
 {
 	if (hOutput == INVALID_HANDLE_VALUE) return false;
 	DWORD cWritten = 0;
-	size_t stringLen = wcslen(str);
+	size_t stringLen_size_t = wcslen(str);
+	if (stringLen_size_t > MAXDWORD)
+	{
+		// Truncate to MAXDWORD length
+		stringLen_size_t = MAXDWORD;
+	}
+	DWORD stringLen = (DWORD)stringLen_size_t;
 	if (isConsoleOutput) {
 		if (WriteConsoleW(hOutput, str, stringLen, &cWritten, NULL) == 0) {
 			// WriteConsole failed
@@ -403,7 +409,6 @@ static bool doFSHandlesPointToSameTarget(HANDLE h1, HANDLE h2)
 		return true;
 	}
 
-OlderAPI:
 	// Fall-back to the older GetFileInformationByHandle
 	BY_HANDLE_FILE_INFORMATION info_h1 = { 0 };
 	BY_HANDLE_FILE_INFORMATION info_h2 = { 0 };
