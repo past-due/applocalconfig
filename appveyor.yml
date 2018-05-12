@@ -6,18 +6,21 @@ environment:
     VC_TOOLCHAIN: v140_xp
     VC_TARGET_PLATFORMNAME: Win32
     OUTPUT_PLATFORMNAME: vs14-x86
+    FILEVERSION_TO_CHECK: vcruntime140.dll
   # 32-bit (x86) Windows build (VS 2017):
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     VC_GENERATOR: "Visual Studio 15 2017"
     VC_TOOLCHAIN: v141_xp
     VC_TARGET_PLATFORMNAME: Win32
     OUTPUT_PLATFORMNAME: vs15-x86
+    FILEVERSION_TO_CHECK: vcruntime140.dll
   # 64-bit (x64) Windows build (VS 2017):
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     VC_GENERATOR: "Visual Studio 15 2017"
     VC_TOOLCHAIN: v141_xp
     VC_TARGET_PLATFORMNAME: x64
     OUTPUT_PLATFORMNAME: vs15-x64
+    FILEVERSION_TO_CHECK: vcruntime140.dll
 
 platform:
   - x64
@@ -36,8 +39,11 @@ build:
 after_build:
   # Package the install output into a zip
   # Name the zip file based on the platform-name & repo info:
-  #   applocalconfig-<BRANCH>-<DATE>-<TIME>-<COMMIT_FIRST_7>-<PLATFORM: x86, x64>.zip
-  - ps: cmd /c 7z a "applocalconfig-$($env:APPVEYOR_REPO_BRANCH)-$(get-date -f yyyyMMdd-HHmmss)-$($env:APPVEYOR_REPO_COMMIT.SubString(0,7))-$($env:OUTPUT_PLATFORMNAME).zip" "$($env:APPVEYOR_BUILD_FOLDER)\install\*"
+  #   applocalconfig-<BRANCH>-<DATE>-<TIME>-<COMMIT_FIRST_7>-<PLATFORM: x86, x64>-<RUNTIME_VERSION>.zip
+  - ps: |
+      $VersionInfo = (Get-Item "$($env:APPVEYOR_BUILD_FOLDER)\install\$($env:FILEVERSION_TO_CHECK)").VersionInfo
+      $FileVersion = ("{0}.{1}.{2}.{3}" -f $VersionInfo.FileMajorPart, $VersionInfo.FileMinorPart,$VersionInfo.FileBuildPart, $VersionInfo.FilePrivatePart)
+      cmd /c 7z a "applocalconfig-$($env:APPVEYOR_REPO_BRANCH)-$(get-date -f yyyyMMdd-HHmmss)-$($env:APPVEYOR_REPO_COMMIT.SubString(0,7))-$($env:OUTPUT_PLATFORMNAME)-$($FileVersion).zip" "$($env:APPVEYOR_BUILD_FOLDER)\install\*"
 
 artifacts:
   - path: applocalconfig-*.zip
