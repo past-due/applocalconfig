@@ -1,0 +1,127 @@
+name: Windows
+
+on:
+  push:
+    # Match all pushes
+  pull_request:
+    # Match all pull requests
+
+jobs:
+  windows-build:
+    strategy:
+      matrix:
+        compiler: ["vc2019"]
+        architecture: ["x86", "x64"]
+      fail-fast: false
+    env:
+      APPCONFIG_MSVC_VER: ${{ matrix.compiler }}
+      APPCONFIG_TARGET_ARCH: ${{ matrix.architecture }}
+    name: '${{ matrix.architecture }} [${{ matrix.compiler }}]'
+    runs-on: windows-latest
+    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        path: 'src'
+    - name: Generate Settings for Run [${{ matrix.compiler }}:${{ matrix.architecture }}]
+      id: settings
+      run: |
+        # Basic variable setup
+        # --------------------
+
+        $APPCONFIG_VC_TARGET_PLATFORMNAME = "$env:APPCONFIG_TARGET_ARCH"
+
+        if ($env:APPCONFIG_TARGET_ARCH -eq "x86") {
+          $APPCONFIG_VC_TARGET_PLATFORMNAME = "Win32" # special case, map "x86" -> "Win32"
+        }
+
+        # ------------------------------
+        # MSVC version / generator info
+
+        $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = ""
+        if ($env:APPCONFIG_MSVC_VER -eq "vc2019") {
+          $APPCONFIG_VC_GENERATOR = "Visual Studio 16 2019"
+          #$env:APPCONFIG_VC_TOOLCHAIN = "v142"
+          $APPCONFIG_FILEVERSION_TO_CHECK = "vcruntime140.dll"
+          # Get the installation path for a specific version of MSVC (2019)
+          $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = & "vswhere.exe" -latest -property installationPath -version "[16.0,17.0)"
+          if ($LastExitCode -ne 0)
+          {
+            echo "::warning ::Could not find MSVC 2019"
+            $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = ""
+          }
+        }
+        elseif ($env:APPCONFIG_MSVC_VER -eq "vc2017") {
+          $APPCONFIG_VC_GENERATOR = "Visual Studio 15 2017"
+          #$env:APPCONFIG_VC_TOOLCHAIN = "v141"
+          $APPCONFIG_FILEVERSION_TO_CHECK = "vcruntime140.dll"
+          # Get the installation path for a specific version of MSVC (2017)
+          $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = & "vswhere.exe" -latest -property installationPath -version "[15.0,16.0)"
+          if ($LastExitCode -ne 0)
+          {
+            echo "::warning ::Could not find MSVC 2017"
+            $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = ""
+          }
+        }
+
+        if ([string]::IsNullOrWhitespace(${APPCONFIG_VISUAL_STUDIO_INSTALL_PATH}))
+        {
+          $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = & "vswhere.exe" -latest -property installationPath
+          echo "::warning ::Default to 'latest' MSVC: `"${APPCONFIG_VISUAL_STUDIO_INSTALL_PATH}`""
+        }
+
+        # ----------------
+        # Export Variables
+
+        # Export everything important to environment variables (for future steps)
+        echo "::set-env name=APPCONFIG_REPO_PATH::${{ github.workspace }}\src"
+        echo "::set-env name=APPCONFIG_VC_TARGET_PLATFORMNAME::${APPCONFIG_VC_TARGET_PLATFORMNAME}"
+        echo "::set-env name=APPCONFIG_VC_GENERATOR::${APPCONFIG_VC_GENERATOR}"
+        #echo "::set-env name=APPCONFIG_VC_TOOLCHAIN::${APPCONFIG_VC_TOOLCHAIN}"
+        echo "::set-env name=APPCONFIG_FILEVERSION_TO_CHECK::${APPCONFIG_FILEVERSION_TO_CHECK}"
+        echo "::set-env name=APPCONFIG_VISUAL_STUDIO_INSTALL_PATH::${APPCONFIG_VISUAL_STUDIO_INSTALL_PATH}"
+        # echo "::set-output name=APPCONFIG_DEPLOY_RELEASE::${APPCONFIG_DEPLOY_RELEASE}"
+    #####################################################
+    - name: Create directories
+      run: |
+        New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\build"
+        New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\install"
+        New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\output"
+    - name: CMake Configure
+      working-directory: '${{ github.workspace }}\build'
+      run: |
+        cmake -DCMAKE_GENERATOR_INSTANCE="${env:APPCONFIG_VISUAL_STUDIO_INSTALL_PATH}" -G "${env:APPCONFIG_VC_GENERATOR}" -A "${env:APPCONFIG_VC_TARGET_PLATFORMNAME}" -DCMAKE_INSTALL_PREFIX:PATH="${{ github.workspace }}\install" "${env:APPCONFIG_REPO_PATH}"
+    - name: CMake Build
+      id: build
+      run: |
+        & cmake --build build --config Release --target install
+
+        # Package the install output into a zip
+        # Name the zip file based on the platform-name & built product info:
+        #   applocalconfig-<APPCONFIG_MSVC_VER>-<APPCONFIG_TARGET_ARCH>-<RUNTIME_VERSION>.zip
+        $VersionInfo = (Get-Item "${{ github.workspace }}\install\$($env:APPCONFIG_FILEVERSION_TO_CHECK)").VersionInfo
+        $FileVersion = ("{0}.{1}.{2}.{3}" -f $VersionInfo.FileMajorPart, $VersionInfo.FileMinorPart,$VersionInfo.FileBuildPart, $VersionInfo.FilePrivatePart)
+        $OutputFilename = "applocalconfig-$($env:APPCONFIG_MSVC_VER)-$($env:APPCONFIG_TARGET_ARCH)-$($FileVersion).zip"
+        $OutputFile = "${{ github.workspace }}\output\${OutputFilename}"
+        cmd /c 7z a "$($OutputFile)" "${{ github.workspace }}\install\*"
+        echo "::set-output name=APPCONFIG_FILEVERSION::${FileVersion}"
+        echo "::set-output name=APPCONFIG_OUTPUT_FILE::${OutputFile}"
+        echo "::set-output name=APPCONFIG_OUTPUT_FILENAME::${OutputFilename}"
+    - name: Log Build Output Hash
+      working-directory: '${{ github.workspace }}\output'
+      run: |
+        # Log hash of the built .zip
+        # $outputFileName = Split-Path "${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}" -leaf
+        Write-Host "SHA512 Hashes:"
+        Write-Host "`n${{ steps.build.outputs.APPCONFIG_OUTPUT_FILENAME }}`n`t-> SHA512: $((Get-FileHash -LiteralPath "${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}" -Algorithm SHA512).Hash)`n`t`-> Size (bytes): $((Get-Item -LiteralPath "${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}").Length)"
+        Write-Host ""
+    #####################################################
+    # Upload build artifact
+    #####################################################
+    - name: 'Upload Artifact'
+      uses: actions/upload-artifact@v1
+      if: success()
+      with:
+        name: '${{ steps.build.outputs.APPCONFIG_OUTPUT_FILENAME }}'
+        path: '${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}'
