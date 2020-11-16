@@ -5,6 +5,9 @@ on:
     # Match all pushes
   pull_request:
     # Match all pull requests
+  schedule:
+    - cron: "5 10 * * 1"
+  workflow_dispatch:
 
 jobs:
   windows-build:
@@ -29,7 +32,6 @@ jobs:
       run: |
         # Basic variable setup
         # --------------------
-
         $APPCONFIG_VC_TARGET_PLATFORMNAME = "$env:APPCONFIG_TARGET_ARCH"
 
         if ($env:APPCONFIG_TARGET_ARCH -eq "x86") {
@@ -126,3 +128,159 @@ jobs:
         name: '${{ steps.build.outputs.APPCONFIG_OUTPUT_FILENAME }}'
         path: '${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}'
         if-no-files-found: 'error'
+  create-release:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    needs: windows-build
+    name: 'Auto-Release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Download All Artifacts'
+        uses: actions/download-artifact@v2
+        with:
+          path: dl/artifacts
+      - name: 'Get Latest Release Info'
+        id: 'latest-release-info'
+        env:
+          APPCONFIG_VERSIONCHECK_ARCH: x64
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -H "Accept: application/vnd.github.v3.raw" -H "Authorization: token ${GITHUB_TOKEN}" -s "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" > "latest.json"
+          latest_release_id="$(cat "latest.json" | jq -r '.id')"
+          echo "latest_release_id=${latest_release_id}"
+          latest_release_tagname="$(cat "latest.json" | jq -r '.tag_name')"
+          echo "latest_release_tagname=${latest_release_tagname}"
+          # Remove "v/" or "v" prefix (as in "v3.2.2"), if present
+          latest_version="$(echo "${latest_release_tagname}" | sed -e 's:^v/::' -e 's:^v::')"
+          echo "latest_version=${latest_version}"
+          latest_release_runtime_version=$(cat "latest.json" | jq -r '.body' | sed -n "s/^\s*MSVC [0-9][0-9]* [|] ${APPCONFIG_VERSIONCHECK_ARCH} [|] \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)/\1/p")
+          echo "latest_release_runtime_version=${latest_release_runtime_version}"
+
+          echo "::set-output name=RELEASE_ID::${latest_release_id}"
+          echo "::set-output name=RELEASE_TAGNAME::${latest_release_tagname}"
+          echo "::set-output name=RELEASE_SEMVER::${latest_version}"
+          echo "::set-output name=RUNTIME_VERSION::${latest_release_runtime_version}"
+      - name: 'Calculate Next SemVer'
+        id: 'next-semver'
+        run: |
+          # Reference: https://stackoverflow.com/a/17364637
+          # Accepts a version string and prints it incremented by one.
+          # Usage: increment_version <version> [<position>] [<leftmost>]
+          increment_version() {
+             local usage=" USAGE: $FUNCNAME [-l] [-t] <version> [<position>] [<leftmost>]
+                     -l : remove leading zeros
+                     -t : drop trailing zeros
+              <version> : The version string.
+             <position> : Optional. The position (starting with one) of the number 
+                          within <version> to increment.  If the position does not 
+                          exist, it will be created.  Defaults to last position.
+             <leftmost> : The leftmost position that can be incremented.  If does not
+                          exist, position will be created.  This right-padding will
+                          occur even to right of <position>, unless passed the -t flag."
+
+             # Get flags.
+             local flag_remove_leading_zeros=0
+             local flag_drop_trailing_zeros=0
+             while [ "${1:0:1}" == "-" ]; do
+                if [ "$1" == "--" ]; then shift; break
+                elif [ "$1" == "-l" ]; then flag_remove_leading_zeros=1
+                elif [ "$1" == "-t" ]; then flag_drop_trailing_zeros=1
+                else echo -e "Invalid flag: ${1}\n$usage"; return 1; fi
+                shift; done
+
+             # Get arguments.
+             if [ ${#@} -lt 1 ]; then echo "$usage"; return 1; fi
+             local v="${1}"             # version string
+             local targetPos=${2-last}  # target position
+             local minPos=${3-${2-0}}   # minimum position
+
+             # Split version string into array using its periods. 
+             local IFSbak; IFSbak=IFS; IFS='.' # IFS restored at end of func to                     
+             read -ra v <<< "$v"               #  avoid breaking other scripts.
+
+             # Determine target position.
+             if [ "${targetPos}" == "last" ]; then 
+                if [ "${minPos}" == "last" ]; then minPos=0; fi
+                targetPos=$((${#v[@]}>${minPos}?${#v[@]}:$minPos)); fi
+             if [[ ! ${targetPos} -gt 0 ]]; then
+                echo -e "Invalid position: '$targetPos'\n$usage"; return 1; fi
+             (( targetPos--  )) || true # offset to match array index
+
+             # Make sure minPosition exists.
+             while [ ${#v[@]} -lt ${minPos} ]; do v+=("0"); done;
+
+             # Increment target position.
+             v[$targetPos]=`printf %0${#v[$targetPos]}d $((10#${v[$targetPos]}+1))`;
+
+             # Remove leading zeros, if -l flag passed.
+             if [ $flag_remove_leading_zeros == 1 ]; then
+                for (( pos=0; $pos<${#v[@]}; pos++ )); do
+                   v[$pos]=$((${v[$pos]}*1)); done; fi
+
+             # If targetPosition was not at end of array, reset following positions to
+             #   zero (or remove them if -t flag was passed).
+             if [[ ${flag_drop_trailing_zeros} -eq "1" ]]; then
+                  for (( p=$((${#v[@]}-1)); $p>$targetPos; p-- )); do unset v[$p]; done
+             else for (( p=$((${#v[@]}-1)); $p>$targetPos; p-- )); do v[$p]=0; done; fi
+
+             echo "${v[*]}"
+             IFS=IFSbak
+             return 0
+          }
+          next_release_semver="$(increment_version ${{ steps.latest-release-info.outputs.RELEASE_SEMVER }} last 3)"
+          echo "next_release_semver=${next_release_semver}"
+          echo "::set-output name=NEXT_SEMVER::${next_release_semver}"
+      - name: 'Determine whether to Auto-Release'
+        id: 'config'
+        working-directory: 'dl/artifacts'
+        run: |
+          echo "Parsing artifacts for version information"
+          echo "Built on: $(date '+%Y-%m-%d')" > "release_body.txt"
+          echo "" >> "release_body.txt"
+          echo "Compiler | Architecture | Local Runtime Version" >> "release_body.txt"
+          echo "--------- | --------- | -------------" >> "release_body.txt"
+          NEEDS_RELEASE=0
+          for d in */ ; do
+            artifact_filename="${d%/}"
+            echo "Found artifact: ${artifact_filename}"
+            # Extract the runtime version number (etc) from the artifact filename
+            # Expected format of artifact folder is: applocalconfig-vc<MSVCVER>-<ARCH>-XX.YY.ZZZZZ.B.zip/
+            artifact_msvc_version="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc\([0-9]*\)-[a-z0-9A-Z]*-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*.zip$/\1/p")"
+            artifact_architecture="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-\([a-z0-9A-Z]*\)-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*.zip$/\1/p")"
+            artifact_runtime_version="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-[a-z0-9A-Z]*-\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).zip$/\1/p")"
+            echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}"
+            echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}" >> "release_body.txt"
+            
+            # Compare versus the runtime version number included in the latest release
+            if [ "$artifact_runtime_version" != "${{ steps.latest-release-info.outputs.RUNTIME_VERSION }}" ]; then
+              NEEDS_RELEASE=1
+            fi
+            
+            # Rename the actual .zip to no longer include the runtime version
+            # Expected output filename is: applocalconfig-vc<MSVCVER>-<ARCH>.zip
+            mv "${d}${artifact_filename}" "${d}applocalconfig-vc${artifact_msvc_version}-${artifact_architecture}.zip"
+          done
+          if [ $NEEDS_RELEASE -eq 1 ]; then
+            echo "::set-output name=AUTO_RELEASE::true"
+          else
+            echo "::set-output name=AUTO_RELEASE::false"
+          fi
+      - name: 'Auto-Release'
+        if: success() && (steps.config.outputs.AUTO_RELEASE == 'true')
+        uses: past-due/action-gh-release@master
+        with:
+          tag_name: 'v${{ steps.next-semver.outputs.NEXT_SEMVER }}'
+          name: '${{ steps.next-semver.outputs.NEXT_SEMVER }}'
+          files: ./dl/artifacts/*/*.zip
+          draft: true
+          body_path: ./dl/artifacts/release_body.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 'Auto-Publish Release'
+        if: success() && (steps.config.outputs.AUTO_RELEASE == 'true')
+        uses: past-due/action-gh-release@master
+        with:
+          tag_name: 'v${{ steps.next-semver.outputs.NEXT_SEMVER }}'
+          name: '${{ steps.next-semver.outputs.NEXT_SEMVER }}'
+          draft: false
+        env:
+         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
