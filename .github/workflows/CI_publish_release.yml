@@ -16,7 +16,7 @@ jobs:
     # SF_RELEASES_API_KEY
     env:
       SF_PROJECT_NAME: 'applocalconfig'
-      SF_BASE_PATH: 'test/releases'
+      SF_BASE_PATH: 'releases'
       RELEASE_CONTEXT: ${{ toJson(github.event.release) }}
     name: 'Mirror to SourceForge'
     runs-on: ubuntu-latest
