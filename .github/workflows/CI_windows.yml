@@ -234,10 +234,11 @@ jobs:
         working-directory: 'dl/artifacts'
         run: |
           echo "Parsing artifacts for version information"
-          echo "Built on: $(date '+%Y-%m-%d')" > "release_body.txt"
-          echo "" >> "release_body.txt"
-          echo "Compiler | Architecture | Local Runtime Version" >> "release_body.txt"
-          echo "--------- | --------- | -------------" >> "release_body.txt"
+          echo "v${{ steps.next-semver.outputs.NEXT_SEMVER }}" > "BUILD_INFO.md"
+          echo "Built on: $(date '+%Y-%m-%d')" >> "BUILD_INFO.md"
+          echo "" >> "BUILD_INFO.md"
+          echo "Compiler | Architecture | Local Runtime Version" >> "BUILD_INFO.md"
+          echo "--------- | --------- | -------------" >> "BUILD_INFO.md"
           NEEDS_RELEASE=0
           for d in */ ; do
             artifact_filename="${d%/}"
@@ -248,7 +249,7 @@ jobs:
             artifact_architecture="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-\([a-z0-9A-Z]*\)-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*.zip$/\1/p")"
             artifact_runtime_version="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-[a-z0-9A-Z]*-\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).zip$/\1/p")"
             echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}"
-            echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}" >> "release_body.txt"
+            echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}" >> "BUILD_INFO.md"
             
             # Compare versus the runtime version number included in the latest release
             if [ "$artifact_runtime_version" != "${{ steps.latest-release-info.outputs.RUNTIME_VERSION }}" ]; then
@@ -270,9 +271,11 @@ jobs:
         with:
           tag_name: 'v${{ steps.next-semver.outputs.NEXT_SEMVER }}'
           name: '${{ steps.next-semver.outputs.NEXT_SEMVER }}'
-          files: ./dl/artifacts/*/*.zip
+          files: |
+            ./dl/artifacts/*/*.zip
+            ./dl/artifacts/BUILD_INFO.md
           draft: false
-          body_path: ./dl/artifacts/release_body.txt
+          body_path: ./dl/artifacts/BUILD_INFO.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # **********************************************
@@ -325,6 +328,7 @@ jobs:
             echo "Found artifact: ${artifact}"
             cp "${artifact}" "${UPLOAD_DIR}/$(basename -- "${artifact}")"
           done
+          cp "BUILD_INFO.md" "${UPLOAD_DIR}/BUILD_INFO.md"
           # Output list of staged files
           cd "${UPLOAD_DIR}"
           ls -al
