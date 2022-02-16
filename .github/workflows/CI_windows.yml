@@ -13,14 +13,14 @@ jobs:
   windows-build:
     strategy:
       matrix:
-        compiler: ["vc2019"]
+        compiler: ["vc2022"]
         architecture: ["x86", "x64", "arm64"]
       fail-fast: false
     env:
       APPCONFIG_MSVC_VER: ${{ matrix.compiler }}
       APPCONFIG_TARGET_ARCH: ${{ matrix.architecture }}
     name: '${{ matrix.architecture }} [${{ matrix.compiler }}]'
-    runs-on: windows-latest
+    runs-on: windows-2022
     if: "!contains(github.event.head_commit.message, '[ci skip]')"
     steps:
     - uses: actions/checkout@v2
@@ -42,7 +42,19 @@ jobs:
         # MSVC version / generator info
 
         $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = ""
-        if ($env:APPCONFIG_MSVC_VER -eq "vc2019") {
+        if ($env:APPCONFIG_MSVC_VER -eq "vc2022") {
+          $APPCONFIG_VC_GENERATOR = "Visual Studio 17 2022"
+          #$env:APPCONFIG_VC_TOOLCHAIN = "v143"
+          $APPCONFIG_FILEVERSION_TO_CHECK = "vcruntime140.dll"
+          # Get the installation path for a specific version of MSVC (2022)
+          $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = & "vswhere.exe" -latest -property installationPath -version "[17.0,18.0)"
+          if ($LastExitCode -ne 0)
+          {
+            echo "::warning ::Could not find MSVC 2022"
+            $APPCONFIG_VISUAL_STUDIO_INSTALL_PATH = ""
+          }
+        }
+        elseif ($env:APPCONFIG_MSVC_VER -eq "vc2019") {
           $APPCONFIG_VC_GENERATOR = "Visual Studio 16 2019"
           #$env:APPCONFIG_VC_TOOLCHAIN = "v142"
           $APPCONFIG_FILEVERSION_TO_CHECK = "vcruntime140.dll"
