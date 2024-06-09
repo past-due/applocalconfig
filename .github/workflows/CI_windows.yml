@@ -23,7 +23,7 @@ jobs:
     runs-on: windows-2022
     if: "!contains(github.event.head_commit.message, '[ci skip]')"
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         path: 'src'
@@ -95,7 +95,7 @@ jobs:
         #echo "APPCONFIG_VC_TOOLCHAIN=${APPCONFIG_VC_TOOLCHAIN}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         echo "APPCONFIG_FILEVERSION_TO_CHECK=${APPCONFIG_FILEVERSION_TO_CHECK}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         echo "APPCONFIG_VISUAL_STUDIO_INSTALL_PATH=${APPCONFIG_VISUAL_STUDIO_INSTALL_PATH}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        # echo "::set-output name=APPCONFIG_DEPLOY_RELEASE::${APPCONFIG_DEPLOY_RELEASE}"
+        # echo "APPCONFIG_DEPLOY_RELEASE=${APPCONFIG_DEPLOY_RELEASE}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
     #####################################################
     - name: Create directories
       run: |
@@ -119,9 +119,10 @@ jobs:
         $OutputFilename = "applocalconfig-$($env:APPCONFIG_MSVC_VER)-$($env:APPCONFIG_TARGET_ARCH)-$($FileVersion).zip"
         $OutputFile = "${{ github.workspace }}\output\${OutputFilename}"
         cmd /c 7z a "$($OutputFile)" "${{ github.workspace }}\install\*"
-        echo "::set-output name=APPCONFIG_FILEVERSION::${FileVersion}"
-        echo "::set-output name=APPCONFIG_OUTPUT_FILE::${OutputFile}"
-        echo "::set-output name=APPCONFIG_OUTPUT_FILENAME::${OutputFilename}"
+
+        echo "APPCONFIG_FILEVERSION=${FileVersion}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        echo "APPCONFIG_OUTPUT_FILE=${OutputFile}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        echo "APPCONFIG_OUTPUT_FILENAME=${OutputFilename}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
     - name: Log Build Output Hash
       working-directory: '${{ github.workspace }}\output'
       run: |
@@ -134,7 +135,7 @@ jobs:
     # Upload build artifact
     #####################################################
     - name: 'Upload Artifact'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: success()
       with:
         name: '${{ steps.build.outputs.APPCONFIG_OUTPUT_FILENAME }}'
@@ -147,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 'Download All Artifacts'
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           path: dl/artifacts
       - name: 'Get Latest Release Info'
@@ -167,10 +168,10 @@ jobs:
           latest_release_runtime_version=$(cat "latest.json" | jq -r '.body' | sed -n "s/^\s*MSVC [0-9][0-9]* [|] ${APPCONFIG_VERSIONCHECK_ARCH} [|] \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)/\1/p")
           echo "latest_release_runtime_version=${latest_release_runtime_version}"
 
-          echo "::set-output name=RELEASE_ID::${latest_release_id}"
-          echo "::set-output name=RELEASE_TAGNAME::${latest_release_tagname}"
-          echo "::set-output name=RELEASE_SEMVER::${latest_version}"
-          echo "::set-output name=RUNTIME_VERSION::${latest_release_runtime_version}"
+          echo "RELEASE_ID=${latest_release_id}" >> $GITHUB_OUTPUT
+          echo "RELEASE_TAGNAME=${latest_release_tagname}" >> $GITHUB_OUTPUT
+          echo "RELEASE_SEMVER=${latest_version}" >> $GITHUB_OUTPUT
+          echo "RUNTIME_VERSION=${latest_release_runtime_version}" >> $GITHUB_OUTPUT
       - name: 'Calculate Next SemVer'
         id: 'next-semver'
         run: |
@@ -240,7 +241,7 @@ jobs:
           }
           next_release_semver="$(increment_version ${{ steps.latest-release-info.outputs.RELEASE_SEMVER }} last 3)"
           echo "next_release_semver=${next_release_semver}"
-          echo "::set-output name=NEXT_SEMVER::${next_release_semver}"
+          echo "NEXT_SEMVER=${next_release_semver}" >> $GITHUB_OUTPUT
       - name: 'Determine whether to Auto-Release'
         id: 'config'
         working-directory: 'dl/artifacts'
@@ -273,9 +274,9 @@ jobs:
             mv "${d}${artifact_filename}" "${d}applocalconfig-vc${artifact_msvc_version}-${artifact_architecture}.zip"
           done
           if [ $NEEDS_RELEASE -eq 1 ]; then
-            echo "::set-output name=AUTO_RELEASE::true"
+            echo "AUTO_RELEASE=true" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=AUTO_RELEASE::false"
+            echo "AUTO_RELEASE=false" >> $GITHUB_OUTPUT
           fi
       - name: 'Auto-Release'
         if: success() && (steps.config.outputs.AUTO_RELEASE == 'true')
@@ -323,7 +324,7 @@ jobs:
           fi
           SF_FILE_PATH="${SF_FILE_PATH}${RELEASE_TAG}"
           echo "SF_FILE_PATH=${SF_FILE_PATH}"
-          echo "::set-output name=SF_FILE_PATH::${SF_FILE_PATH}"
+          echo "SF_FILE_PATH=${SF_FILE_PATH}" >> $GITHUB_OUTPUT
 
           # Prepare release_assets directory
           mkdir -p "release_assets/${SF_FILE_PATH}"
