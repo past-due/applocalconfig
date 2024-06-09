@@ -156,11 +156,12 @@ jobs:
         env:
           APPCONFIG_VERSIONCHECK_ARCH: x64
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          curl -H "Accept: application/vnd.github.v3.raw" -H "Authorization: token ${GITHUB_TOKEN}" -s "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" > "latest.json"
+          gh release view --json "id,tagName,body" > "latest.json"
           latest_release_id="$(cat "latest.json" | jq -r '.id')"
           echo "latest_release_id=${latest_release_id}"
-          latest_release_tagname="$(cat "latest.json" | jq -r '.tag_name')"
+          latest_release_tagname="$(cat "latest.json" | jq -r '.tagName')"
           echo "latest_release_tagname=${latest_release_tagname}"
           # Remove "v/" or "v" prefix (as in "v3.2.2"), if present
           latest_version="$(echo "${latest_release_tagname}" | sed -e 's:^v/::' -e 's:^v::')"
@@ -280,17 +281,12 @@ jobs:
           fi
       - name: 'Auto-Release'
         if: success() && (steps.config.outputs.AUTO_RELEASE == 'true')
-        uses: past-due/action-gh-release@master
-        with:
-          tag_name: 'v${{ steps.next-semver.outputs.NEXT_SEMVER }}'
-          name: '${{ steps.next-semver.outputs.NEXT_SEMVER }}'
-          files: |
-            ./dl/artifacts/*/*.zip
-            ./dl/artifacts/BUILD_INFO.md
-          draft: false
-          body_path: ./dl/artifacts/BUILD_INFO.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          next_semver: '${{ steps.next-semver.outputs.NEXT_SEMVER }}'
+        run: |
+          gh release create "v${next_semver}" --title "${next_semver}" -F "./dl/artifacts/BUILD_INFO.md" ./dl/artifacts/*/*.zip ./dl/artifacts/BUILD_INFO.md
       # **********************************************
       # Mirror to SourceForge
       # **********************************************

@@ -44,6 +44,7 @@ jobs:
           echo "::error ::RELEASE_TAG variable is empty. Aborting."
           exit 1
         fi
+        echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_OUTPUT
 
         # Get information for this tagged release
         tagged_release_id="${{ github.event.release.id }}"
@@ -65,11 +66,13 @@ jobs:
       id: download
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_REPO: ${{ github.repository }}
+        RELEASE_TAG: ${{ steps.settings.outputs.RELEASE_TAG }}
         SF_FILE_PATH: ${{ steps.settings.outputs.SF_FILE_PATH }}
       working-directory: '${{ github.workspace }}/release_assets/${{ steps.settings.outputs.SF_FILE_PATH }}'
       run: |
         # Download all release assets
-        echo "${RELEASE_CONTEXT}" | jq -r '.assets[] | "\(.name)\n\(.url)"' | xargs -r -n2 sh -c 'curl -H "Accept: application/octet-stream" -H "Authorization: token ${GITHUB_TOKEN}" -Lf -o "$1" "$2"' sh
+        gh release download "${RELEASE_TAG}"
         # Output list of downloaded files
         ls -al
         echo "Done."
@@ -77,9 +80,10 @@ jobs:
       id: latestrelease
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_REPO: ${{ github.repository }}
       run: |
         echo "Get Latest Release info for repo: ${GITHUB_REPOSITORY}"
-        latest_release_id="$(curl -H "Accept: application/vnd.github.v3.raw" -H "Authorization: token ${GITHUB_TOKEN}" -s "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" | jq '.id')"
+        latest_release_id="$(gh release view --json "id" --jq '.id')"
         echo "latest_release_id=${latest_release_id}"
         echo "latest_release_id=${latest_release_id}" >> $GITHUB_OUTPUT
     - name: Set up SourceForge known_hosts
