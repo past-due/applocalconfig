@@ -111,35 +111,52 @@ jobs:
       run: |
         & cmake --build build --config Release --target install
 
-        # Package the install output into a zip
-        # Name the zip file based on the platform-name & built product info:
+        # Name the output file based on the platform-name & built product info:
         #   applocalconfig-<APPCONFIG_MSVC_VER>-<APPCONFIG_TARGET_ARCH>-<RUNTIME_VERSION>.zip
         $VersionInfo = (Get-Item "${{ github.workspace }}\install\$($env:APPCONFIG_FILEVERSION_TO_CHECK)").VersionInfo
         $FileVersion = ("{0}.{1}.{2}.{3}" -f $VersionInfo.FileMajorPart, $VersionInfo.FileMinorPart,$VersionInfo.FileBuildPart, $VersionInfo.FilePrivatePart)
-        $OutputFilename = "applocalconfig-$($env:APPCONFIG_MSVC_VER)-$($env:APPCONFIG_TARGET_ARCH)-$($FileVersion).zip"
-        $OutputFile = "${{ github.workspace }}\output\${OutputFilename}"
-        cmd /c 7z a "$($OutputFile)" "${{ github.workspace }}\install\*"
+        $OutputFilename = "applocalconfig-$($env:APPCONFIG_MSVC_VER)-$($env:APPCONFIG_TARGET_ARCH)-$($FileVersion)"
+
+        # Package the install output into a zip
+        $OutputZipFilename = "$($OutputFilename).zip"
+        $OutputZipFile = "${{ github.workspace }}\output\${OutputZipFilename}"
+        cmd /c 7z a "$($OutputZipFile)" "${{ github.workspace }}\install\*"
+
+        # And a 7z archive
+        $Output7ZFilename = "$($OutputFilename).7z"
+        $Output7ZFile = "${{ github.workspace }}\output\${Output7ZFilename}"
+        cmd /c 7z a -t7z -m0=lzma2 -mx=9 "$($Output7ZFile)" "${{ github.workspace }}\install\*"
 
         echo "APPCONFIG_FILEVERSION=${FileVersion}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-        echo "APPCONFIG_OUTPUT_FILE=${OutputFile}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-        echo "APPCONFIG_OUTPUT_FILENAME=${OutputFilename}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-    - name: Log Build Output Hash
+        echo "APPCONFIG_OUTPUT_ZIP_FILE=${OutputZipFile}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        echo "APPCONFIG_OUTPUT_ZIP_FILENAME=${OutputZipFilename}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        echo "APPCONFIG_OUTPUT_7Z_FILE=${Output7ZFile}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        echo "APPCONFIG_OUTPUT_7Z_FILENAME=${Output7ZFilename}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+    - name: Log Build Output Hashes
       working-directory: '${{ github.workspace }}\output'
       run: |
-        # Log hash of the built .zip
-        # $outputFileName = Split-Path "${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}" -leaf
+        # Log hash of the built archives
+        # $outputFileName = Split-Path "${{ steps.build.outputs.APPCONFIG_OUTPUT_ZIP_FILE }}" -leaf
         Write-Host "SHA512 Hashes:"
-        Write-Host "`n${{ steps.build.outputs.APPCONFIG_OUTPUT_FILENAME }}`n`t-> SHA512: $((Get-FileHash -LiteralPath "${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}" -Algorithm SHA512).Hash)`n`t`-> Size (bytes): $((Get-Item -LiteralPath "${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}").Length)"
+        Write-Host "`n${{ steps.build.outputs.APPCONFIG_OUTPUT_ZIP_FILENAME }}`n`t-> SHA512: $((Get-FileHash -LiteralPath "${{ steps.build.outputs.APPCONFIG_OUTPUT_ZIP_FILE }}" -Algorithm SHA512).Hash)`n`t`-> Size (bytes): $((Get-Item -LiteralPath "${{ steps.build.outputs.APPCONFIG_OUTPUT_ZIP_FILE }}").Length)"
+        Write-Host "`n${{ steps.build.outputs.APPCONFIG_OUTPUT_7Z_FILENAME }}`n`t-> SHA512: $((Get-FileHash -LiteralPath "${{ steps.build.outputs.APPCONFIG_OUTPUT_7Z_FILE }}" -Algorithm SHA512).Hash)`n`t`-> Size (bytes): $((Get-Item -LiteralPath "${{ steps.build.outputs.APPCONFIG_OUTPUT_7Z_FILE }}").Length)"
         Write-Host ""
     #####################################################
-    # Upload build artifact
+    # Upload build artifacts
     #####################################################
-    - name: 'Upload Artifact'
+    - name: 'Upload Artifact (ZIP)'
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: '${{ steps.build.outputs.APPCONFIG_OUTPUT_FILENAME }}'
-        path: '${{ steps.build.outputs.APPCONFIG_OUTPUT_FILE }}'
+        name: '${{ steps.build.outputs.APPCONFIG_OUTPUT_ZIP_FILENAME }}'
+        path: '${{ steps.build.outputs.APPCONFIG_OUTPUT_ZIP_FILE }}'
+        if-no-files-found: 'error'
+    - name: 'Upload Artifact (7Z)'
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: '${{ steps.build.outputs.APPCONFIG_OUTPUT_7Z_FILENAME }}'
+        path: '${{ steps.build.outputs.APPCONFIG_OUTPUT_7Z_FILE }}'
         if-no-files-found: 'error'
   create-release:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
