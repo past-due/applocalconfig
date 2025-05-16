@@ -273,12 +273,13 @@ jobs:
           NEEDS_RELEASE=0
           for d in */ ; do
             artifact_filename="${d%/}"
-            echo "Found artifact: ${artifact_filename}"
+            artifact_extension="${artifact_filename##*.}"
+            echo "Found artifact: ${artifact_filename} (w/ extension: ${artifact_extension})"
             # Extract the runtime version number (etc) from the artifact filename
-            # Expected format of artifact folder is: applocalconfig-vc<MSVCVER>-<ARCH>-XX.YY.ZZZZZ.B.zip/
-            artifact_msvc_version="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc\([0-9]*\)-[a-z0-9A-Z]*-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*.zip$/\1/p")"
-            artifact_architecture="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-\([a-z0-9A-Z]*\)-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*.zip$/\1/p")"
-            artifact_runtime_version="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-[a-z0-9A-Z]*-\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).zip$/\1/p")"
+            # Expected format of artifact folder is: applocalconfig-vc<MSVCVER>-<ARCH>-XX.YY.ZZZZZ.B.${artifact_extension}/
+            artifact_msvc_version="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc\([0-9]*\)-[a-z0-9A-Z]*-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*.${artifact_extension}$/\1/p")"
+            artifact_architecture="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-\([a-z0-9A-Z]*\)-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*.${artifact_extension}$/\1/p")"
+            artifact_runtime_version="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-[a-z0-9A-Z]*-\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).${artifact_extension}$/\1/p")"
             echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}"
             echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}" >> "BUILD_INFO.md"
             
@@ -288,8 +289,8 @@ jobs:
             fi
             
             # Rename the actual .zip to no longer include the runtime version
-            # Expected output filename is: applocalconfig-vc<MSVCVER>-<ARCH>.zip
-            mv "${d}${artifact_filename}" "${d}applocalconfig-vc${artifact_msvc_version}-${artifact_architecture}.zip"
+            # Expected output filename is: applocalconfig-vc<MSVCVER>-<ARCH>.${artifact_extension}
+            mv "${d}${artifact_filename}" "${d}applocalconfig-vc${artifact_msvc_version}-${artifact_architecture}.${artifact_extension}"
           done
           if [ $NEEDS_RELEASE -eq 1 ]; then
             echo "AUTO_RELEASE=true" >> $GITHUB_OUTPUT
@@ -303,7 +304,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           next_semver: '${{ steps.next-semver.outputs.NEXT_SEMVER }}'
         run: |
-          gh release create "v${next_semver}" --title "${next_semver}" -F "./dl/artifacts/BUILD_INFO.md" ./dl/artifacts/*/*.zip ./dl/artifacts/BUILD_INFO.md
+          gh release create "v${next_semver}" --title "${next_semver}" -F "./dl/artifacts/BUILD_INFO.md" ./dl/artifacts/*/*.zip ./dl/artifacts/*/*.7z ./dl/artifacts/BUILD_INFO.md
       # **********************************************
       # Mirror to SourceForge
       # **********************************************
