@@ -281,7 +281,10 @@ jobs:
             artifact_architecture="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-\([a-z0-9A-Z]*\)-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*.${artifact_extension}$/\1/p")"
             artifact_runtime_version="$(echo "${artifact_filename}" | sed -n "s/^applocalconfig-vc[0-9]*-[a-z0-9A-Z]*-\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).${artifact_extension}$/\1/p")"
             echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}"
-            echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}" >> "BUILD_INFO.md"
+            if [ "$artifact_extension" == "7z" ]; then
+              # only output for .7z files
+              echo "MSVC ${artifact_msvc_version} | ${artifact_architecture} | ${artifact_runtime_version}" >> "BUILD_INFO.md"
+            fi
             
             # Compare versus the runtime version number included in the latest release
             if [ "$artifact_runtime_version" != "${{ steps.latest-release-info.outputs.RUNTIME_VERSION }}" ]; then
