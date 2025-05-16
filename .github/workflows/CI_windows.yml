@@ -351,7 +351,8 @@ jobs:
         run: |
           # Copy all release assets to upload dir
           UPLOAD_DIR="${{ github.workspace }}/release_assets/${SF_FILE_PATH}"
-          for artifact in */*.zip ; do
+          shopt -s nullglob
+          for artifact in */*.zip */*.7z ; do
             echo "Found artifact: ${artifact}"
             cp "${artifact}" "${UPLOAD_DIR}/$(basename -- "${artifact}")"
           done
